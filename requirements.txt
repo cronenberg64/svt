@@ -1,0 +1,21 @@
+# Neuro-SVT: Spiking Vision Transformer Dependencies
+# Research project for energy-efficient Object Permanence
+
+# Core frameworks
+torch>=2.0.0
+spikingjelly>=0.0.0.0.14
+
+# CUDA acceleration for RTX A4000 (CUDA 12.x)
+cupy-cuda12x
+
+# Utilities
+numpy>=1.24.0
+tqdm
+tensorboard
+
+# Dataset utilities
+torchvision
+
+# Optional: For visualization
+matplotlib
+seaborn

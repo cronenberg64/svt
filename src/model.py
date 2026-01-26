@@ -65,7 +65,7 @@ class SVT(nn.Module):
         num_heads: int = 8,
         mlp_ratio: float = 4.0,
         spatial_tau: float = 1.1,
-        memory_tau: float = 2.0,
+        memory_tau: float = 5.0,
         drop_rate: float = 0.0,
     ):
         super().__init__()
@@ -93,17 +93,9 @@ class SVT(nn.Module):
         # ============================================
         # Learnable token that persists temporal context
         self.memory_token = nn.Parameter(torch.zeros(1, 1, 1, embed_dim))
-        nn.init.trunc_normal_(self.memory_token, std=0.02)
+        nn.init.trunc_normal_(self.memory_token, std=0.8)
         
-        # Memory token's LIF neuron with SLOW DECAY (τ=2.0)
-        # This is the KEY INNOVATION - allows holding information during occlusion
-        self.memory_lif = neuron.LIFNode(
-            tau=memory_tau,  # SLOWER DECAY than spatial tokens
-            v_threshold=1.0,
-            detach_reset=True,
-            step_mode='m',
-            backend='cupy' if torch.cuda.is_available() else 'torch',
-        )
+        # Note: memory_lif moved to SDSABlock for per-layer temporal persistence
         
         # ============================================
         # POSITIONAL ENCODING
@@ -111,7 +103,7 @@ class SVT(nn.Module):
         # Learnable position embeddings for patches + memory token
         num_tokens = self.num_patches + 1  # +1 for memory token
         self.pos_embed = nn.Parameter(torch.zeros(1, 1, num_tokens, embed_dim))
-        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        nn.init.trunc_normal_(self.pos_embed, std=0.2)
         
         # Position encoding LIF (uses spatial tau for position info)
         self.pos_lif = neuron.LIFNode(
@@ -132,7 +124,8 @@ class SVT(nn.Module):
                 qkv_bias=False,
                 attn_drop=drop_rate,
                 proj_drop=drop_rate,
-                tau=spatial_tau,  # Blocks use fast decay
+                spatial_tau=spatial_tau,
+                memory_tau=memory_tau,
             )
             for _ in range(depth)
         ])
@@ -158,7 +151,7 @@ class SVT(nn.Module):
         """Initialize linear layer weights."""
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.trunc_normal_(m.weight, std=0.02)
+                nn.init.trunc_normal_(m.weight, std=0.2)  # Increased from 0.02
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
             elif isinstance(m, nn.Conv2d):
@@ -203,9 +196,6 @@ class SVT(nn.Module):
         # ============================================
         # Expand memory token: (1, 1, 1, D) -> (T, B, 1, D)
         memory_tokens = self.memory_token.expand(T, B, 1, -1)
-        
-        # Apply slower-decay LIF to memory token
-        memory_tokens = self.memory_lif(memory_tokens)  # (T, B, 1, D)
         
         # Concatenate: [memory_token, patch_tokens]
         x = torch.cat([memory_tokens, x], dim=2)  # (T, B, N+1, D)
@@ -265,7 +255,6 @@ class SVT(nn.Module):
         
         # Memory token
         memory_tokens = self.memory_token.expand(T, B, 1, -1)
-        memory_tokens = self.memory_lif(memory_tokens)
         x = torch.cat([memory_tokens, x], dim=2)
         
         # Position encoding
@@ -280,13 +269,22 @@ class SVT(nn.Module):
     
     def reset(self):
         """Reset all LIF neuron states for new sequence processing."""
-        functional.reset_net(self)
+        # Avoid recursion by only resetting actual spiking neurons
+        for module in self.modules():
+            if isinstance(module, (neuron.LIFNode, neuron.IFNode, neuron.ParametricLIFNode)):
+                if hasattr(module, 'reset'):
+                    # Call LIFNode's reset directly (not the parent's reset)
+                    neuron.LIFNode.reset(module) if isinstance(module, neuron.LIFNode) else module.reset()
         
-    def get_memory_token_state(self) -> Optional[torch.Tensor]:
-        """Get current membrane potential of memory token LIF."""
-        if hasattr(self.memory_lif, 'v'):
-            return self.memory_lif.v
-        return None
+    def get_memory_token_state(self) -> List[Optional[torch.Tensor]]:
+        """Get current membrane potential of memory token LIF in all blocks."""
+        states = []
+        for block in self.blocks:
+            if hasattr(block.memory_lif, 'v'):
+                states.append(block.memory_lif.v)
+            else:
+                states.append(None)
+        return states
         
     def count_parameters(self) -> int:
         """Count total trainable parameters."""

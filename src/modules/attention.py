@@ -177,9 +177,7 @@ class SpikingSelfAttention(nn.Module):
         
         return out, attn_map
     
-    def reset(self):
-        """Reset LIF neuron states for new sequence processing."""
-        functional.reset_net(self)
+    # Note: reset() method removed - parent model.reset() handles all LIF neurons
 
 
 class SpikingMLP(nn.Module):
@@ -257,7 +255,8 @@ class SDSABlock(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         drop_path: float = 0.0,
-        tau: float = 2.0,
+        spatial_tau: float = 1.1,
+        memory_tau: float = 2.0,
     ):
         super().__init__()
         
@@ -272,7 +271,7 @@ class SDSABlock(nn.Module):
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
-            tau=tau,
+            tau=spatial_tau,
         )
         
         # Spiking MLP
@@ -281,7 +280,16 @@ class SDSABlock(nn.Module):
             in_features=dim,
             hidden_features=mlp_hidden_dim,
             drop=proj_drop,
-            tau=tau,
+            tau=spatial_tau,
+        )
+
+        # Specialized LIF for Memory Token (Slow Decay)
+        self.memory_lif = neuron.LIFNode(
+            tau=memory_tau,
+            v_threshold=0.5,  # Lowered from 1.0 for stronger firing
+            detach_reset=True,
+            step_mode='m',
+            backend='cupy' if torch.cuda.is_available() else 'torch',
         )
         
         # Optional: DropPath for stochastic depth (not implemented for simplicity)
@@ -294,7 +302,7 @@ class SDSABlock(nn.Module):
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Args:
-            x: Input tensor of shape (T, B, N, D)
+            x: Input tensor of shape (T, B, N, D) where index 0 is memory token
             return_attn: Whether to return attention maps
             
         Returns:
@@ -310,14 +318,23 @@ class SDSABlock(nn.Module):
         residual = x
         x = self.norm2(x)
         x = residual + self.mlp(x)
+
+        # Apply specialized LIF to memory token (index 0)
+        # This ensures the memory token "leaks" slowly across layers
+        T, B, N, D = x.shape
+        x_mem = x[:, :, 0:1, :]
+        x_spatial = x[:, :, 1:, :]
+        
+        x_mem = self.memory_lif(x_mem)
+        
+        # Recombine
+        x = torch.cat([x_mem, x_spatial], dim=2)
         
         if return_attn:
             return x, attn_map
         return x, None
     
-    def reset(self):
-        """Reset all LIF neuron states."""
-        functional.reset_net(self)
+    # Note: reset() method removed - parent model.reset() handles all LIF neurons
 
 
 # Utility function to create attention layers with different tau values

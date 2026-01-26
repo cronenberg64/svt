@@ -1,1 +1,14 @@
-/venv
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Project Specific
+checkpoints/
+*.log
+.DS_Store

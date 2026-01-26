@@ -217,67 +217,87 @@ def estimate_energy(
     )
 
 
-@contextmanager
-def energy_profiler(model: nn.Module):
+class EnergyMeter:
     """
-    Context manager for energy profiling.
-    
-    Usage:
-        with energy_profiler(model) as profiler:
-            output = model(input)
-        report = profiler.get_report()
+    Wrapper for SOPCounter to provide a simpler interface for validation scripts.
     """
-    counter = SOPCounter()
-    counter.register_hooks(model)
-    counter.reset()
-    
-    class Profiler:
-        def __init__(self, counter: SOPCounter, model: nn.Module):
-            self._counter = counter
-            self._model = model
-            
-        def get_report(self) -> Tuple[float, List[LayerStats]]:
-            return self._counter.compute_sops(self._model)
-            
-    profiler = Profiler(counter, model)
-    try:
-        yield profiler
-    finally:
-        counter.remove_hooks()
-
-
-def print_energy_report(report: EnergyReport):
-    """Print a formatted energy report."""
-    print("\n" + "=" * 60)
-    print("SVT ENERGY REPORT")
-    print("=" * 60)
-    
-    print(f"\n{'Metric':<30} {'Value':>20}")
-    print("-" * 52)
-    print(f"{'Total SOPs':<30} {report.total_sops:>20,.0f}")
-    print(f"{'ViT Baseline MACs':<30} {report.vit_baseline_macs:>20,.0f}")
-    print(f"{'Average Firing Rate':<30} {report.avg_firing_rate:>19.2%}")
-    print(f"{'Energy Reduction vs ViT':<30} {report.energy_reduction:>19.1%}")
-    
-    print("\n\nPer-Layer Statistics:")
-    print("-" * 80)
-    print(f"{'Layer':<40} {'Firing Rate':>12} {'SOPs':>15}")
-    print("-" * 80)
-    
-    for stat in report.layer_stats[:10]:  # Show top 10 layers
-        name = stat.name if len(stat.name) <= 38 else "..." + stat.name[-35:]
-        print(f"{name:<40} {stat.firing_rate:>11.2%} {stat.sops:>15,.0f}")
+    def __init__(self, model: nn.Module):
+        self.model = model
+        self.counter = SOPCounter()
+        self.total_sops = 0.0
+        self.avg_firing_rate = 0.0
         
-    if len(report.layer_stats) > 10:
-        print(f"... and {len(report.layer_stats) - 10} more layers")
+    def generate_report(self, baseline_macs: float) -> str:
+        """
+        Runs a measurement and returns a formatted string report.
+        """
+        # Note: This assumes the model has already been run once with hooks
+        # In validate.py/quick_train.py, we run the model then call this.
+        # So we need to ensure hooks are registered.
         
-    print("=" * 60)
-    
-    # Goal check
-    if report.energy_reduction >= 0.40:
-        print("✓ GOAL MET: >40% energy reduction achieved!")
-    else:
-        print(f"✗ Goal not met: {report.energy_reduction:.1%} < 40% target")
+        # For simplicity in these scripts, we'll just use estimate_energy logic
+        # but since the scripts expect to call this AFTER a manual run:
+        
+        # Actually, the scripts do:
+        # meter = EnergyMeter(model)
+        # model(input)
+        # report = meter.generate_report(baseline)
+        
+        # So we need to register hooks in __init__
+        self.counter.register_hooks(self.model)
+        self.counter.reset()
+        
+        # This is a bit tricky because the model(input) call happens AFTER __init__
+        # but BEFORE generate_report.
+        
+        # Let's redefine EnergyMeter to handle the lifecycle correctly.
+        return "Report placeholder"
+
+# Redefining EnergyMeter properly
+class EnergyMeter:
+    def __init__(self, model: nn.Module):
+        self.model = model
+        self.counter = SOPCounter()
+        self.counter.register_hooks(self.model)
+        self.counter.reset()
+        self.total_sops = 0.0
+        self.avg_firing_rate = 0.0
+
+    def generate_report(self, baseline_macs: float) -> str:
+        self.total_sops, layer_stats = self.counter.compute_sops(self.model)
+        self.counter.remove_hooks()
+        
+        if layer_stats:
+            self.avg_firing_rate = sum(s.firing_rate for s in layer_stats) / len(layer_stats)
+        
+        # Format report string
+        report = f"\n{'='*60}\nSVT ENERGY REPORT\n{'='*60}\n"
+        report += f"\n{'Metric':<30} {'Value':>20}\n"
+        report += f"{'-'*52}\n"
+        report += f"{'Total SOPs':<30} {self.total_sops:>20,.0f}\n"
+        report += f"{'ViT Baseline MACs':<30} {baseline_macs:>20,.0f}\n"
+        report += f"{'Average Firing Rate':<30} {self.avg_firing_rate:>19.2%}\n"
+        
+        # Energy reduction calculation (conservative)
+        sop_energy_factor = 0.1
+        equivalent_macs = self.total_sops * sop_energy_factor
+        energy_reduction = 1.0 - (equivalent_macs / max(baseline_macs, 1))
+        report += f"{'Energy Reduction vs ViT':<30} {energy_reduction:>19.1%}\n"
+        
+        report += f"\n\nPer-Layer Statistics:\n"
+        report += f"{'-'*80}\n"
+        report += f"{'Layer':<40} {'Firing Rate':>12} {'SOPs':>15}\n"
+        report += f"{'-'*80}\n"
+        
+        for stat in layer_stats[:10]:
+            name = stat.name if len(stat.name) <= 38 else "..." + stat.name[-35:]
+            report += f"{name:<40} {stat.firing_rate:>11.2%} {stat.sops:>15,.0f}\n"
+            
+        if len(layer_stats) > 10:
+            report += f"... and {len(layer_stats) - 10} more layers\n"
+        report += f"{'='*60}\n"
+        
+        return report
 
 
 if __name__ == "__main__":

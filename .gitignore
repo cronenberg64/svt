@@ -1,14 +1,44 @@
+# ===========================================
+# Neuro-SVT: Spiking Vision Transformer
+# ===========================================
+
 # Virtual Environment
 venv/
 .venv/
 env/
+.env/
 
 # Python Cache
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Project Specific
 checkpoints/
 *.log
-.DS_Store
+*.pt
+*.pth
+
+# Large Data (download manually)
+data/DVS128Gesture/download/
+data/DVS128Gesture/extract/
+data/DVS128Gesture/events_np/
+
+# Temporary files
+*.tmp
+*.bak
+test_*.py
+
+# Jupyter
+.ipynb_checkpoints/

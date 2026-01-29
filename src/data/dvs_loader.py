@@ -57,26 +57,26 @@ class DVSGestureDataLoader:
         self.batch_size = batch_size
         self.num_workers = num_workers
         
-    def get_dataloader(self):
-        def collate_fn(batch):
-            # batch is a list of (events, label)
-            # events is a dict with 't', 'x', 'y', 'p'
-            frames_list = []
-            labels_list = []
-            for events, label in batch:
-                frames = split_to_frames(events, self.T)
-                frames_list.append(frames)
-                labels_list.append(label)
-            
-            # Stack to [B, T, C, H, W] then transpose to [T, B, C, H, W]
-            return torch.stack(frames_list).transpose(0, 1), torch.tensor(labels_list)
+    def collate_fn(self, batch):
+        # batch is a list of (events, label)
+        # events is a dict with 't', 'x', 'y', 'p'
+        frames_list = []
+        labels_list = []
+        for events, label in batch:
+            frames = split_to_frames(events, self.T)
+            frames_list.append(frames)
+            labels_list.append(label)
+        
+        # Stack to [B, T, C, H, W] then transpose to [T, B, C, H, W]
+        return torch.stack(frames_list).transpose(0, 1), torch.tensor(labels_list)
 
+    def get_dataloader(self):
         return DataLoader(
             self.dataset,
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
-            collate_fn=collate_fn,
+            collate_fn=self.collate_fn,
             pin_memory=True
         )
 

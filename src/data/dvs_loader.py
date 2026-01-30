@@ -11,7 +11,7 @@ from typing import Tuple, Optional
 
 def split_to_frames(events: dict, T: int, H: int = 128, W: int = 128) -> torch.Tensor:
     """
-    Integrates DVS events into T frames.
+    Integrates DVS events into T frames using vectorized operations.
     
     Args:
         events: Dictionary containing 't', 'x', 'y', 'p' arrays
@@ -21,24 +21,33 @@ def split_to_frames(events: dict, T: int, H: int = 128, W: int = 128) -> torch.T
     Returns:
         Tensor of shape (T, C=2, H, W)
     """
+    import numpy as np
+    
     t, x, y, p = events['t'], events['x'], events['y'], events['p']
     
     # Normalize time to [0, T-1]
     t_min, t_max = t.min(), t.max()
     if t_max > t_min:
-        t_norm = ((t - t_min) / (t_max - t_min) * (T - 1)).astype(int)
+        t_norm = ((t - t_min) / (t_max - t_min) * (T - 1)).astype(np.int64)
     else:
-        t_norm = t.astype(int)
-        
-    frames = torch.zeros(T, 2, H, W)
+        t_norm = np.zeros_like(t, dtype=np.int64)
     
-    # Accumulate spikes into frames
-    # p=0 is negative, p=1 is positive
-    for i in range(len(t)):
-        frames[t_norm[i], p[i], y[i], x[i]] += 1.0
-        
+    # Clip coordinates to valid range
+    t_norm = np.clip(t_norm, 0, T - 1)
+    x = np.clip(x.astype(np.int64), 0, W - 1)
+    y = np.clip(y.astype(np.int64), 0, H - 1)
+    p = p.astype(np.int64)
+    
+    # Convert to flat indices for scatter_add: index = t*2*H*W + p*H*W + y*W + x
+    flat_indices = t_norm * (2 * H * W) + p * (H * W) + y * W + x
+    
+    # Use bincount to accumulate (much faster than for-loop)
+    counts = np.bincount(flat_indices, minlength=T * 2 * H * W)
+    frames = torch.from_numpy(counts.reshape(T, 2, H, W).astype(np.float32))
+    
     # Clip to binary spikes (0 or 1) for SVT compatibility
     return (frames > 0).float()
+
 
 class DVSGestureDataLoader:
     """

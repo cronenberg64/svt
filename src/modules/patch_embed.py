@@ -113,10 +113,6 @@ class SpikingPatchEmbed(nn.Module):
         
         return x
     
-    def reset(self):
-        """Reset LIF neuron states for new sequence."""
-        functional.reset_net(self)
-        
     def get_grid_size(self) -> Tuple[int, int]:
         """Return the spatial grid dimensions of patches."""
         return (self.grid_size, self.grid_size)
@@ -189,9 +185,6 @@ class SpikingConvStem(nn.Module):
         
         return x
     
-    def reset(self):
-        functional.reset_net(self)
-
 
 if __name__ == "__main__":
     print("Testing SpikingPatchEmbed...")

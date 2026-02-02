@@ -4,10 +4,50 @@ Loads DVS128 Gesture dataset and processes events into frames.
 """
 
 import torch
-from torch.utils.data import DataLoader, random_split
+import os
+from torch.utils.data import DataLoader, Dataset, random_split
 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
 from spikingjelly.datasets import pad_sequence_collate
+from tqdm import tqdm
 from typing import Tuple, Optional
+
+
+class RAMDVS128(Dataset):
+    """
+    RAM-cached DVS128 dataset loader.
+    Loads ALL pre-processed .pt files into RAM at startup.
+    Zero disk I/O during training = blazing fast iteration.
+    """
+    def __init__(self, root: str, train: bool = True):
+        split_dir = os.path.join(root, 'train' if train else 'test')
+        
+        if not os.path.exists(split_dir):
+            raise FileNotFoundError(
+                f"Processed data not found at {split_dir}\n"
+                "Run preprocessing first: python -m src.utils.preprocess_dvs128"
+            )
+        
+        files = sorted([f for f in os.listdir(split_dir) if f.endswith('.pt')])
+        
+        # Load everything into RAM
+        self.data = []
+        total_bytes = 0
+        
+        print(f"Loading {'train' if train else 'test'} data into RAM...")
+        for f in tqdm(files, desc="RAM Cache"):
+            frames, label = torch.load(os.path.join(split_dir, f), weights_only=False)
+            self.data.append((frames.float(), label))
+            total_bytes += frames.numel() * 4  # float32 = 4 bytes
+        
+        gb = total_bytes / (1024 ** 3)
+        print(f"✅ Loaded {len(self.data)} samples into RAM (~{gb:.2f} GB)")
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        return self.data[idx]
+
 
 def split_to_frames(events: dict, T: int, H: int = 128, W: int = 128) -> torch.Tensor:
     """
@@ -49,49 +89,6 @@ def split_to_frames(events: dict, T: int, H: int = 128, W: int = 128) -> torch.T
     return (frames > 0).float()
 
 
-class DVSGestureDataLoader:
-    """
-    Wrapper for DVS128 Gesture dataset.
-    """
-    def __init__(
-        self, 
-        root: str, 
-        train: bool = True, 
-        T: int = 16, 
-        batch_size: int = 16,
-        num_workers: int = 4
-    ):
-        self.dataset = DVS128Gesture(root, train=train, data_type='event')
-        self.T = T
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        
-    def collate_fn(self, batch):
-        # batch is a list of (events, label)
-        # events is a dict with 't', 'x', 'y', 'p'
-        frames_list = []
-        labels_list = []
-        for events, label in batch:
-            frames = split_to_frames(events, self.T)
-            frames_list.append(frames)
-            labels_list.append(label)
-        
-        # Stack to [B, T, C, H, W] then transpose to [T, B, C, H, W]
-        return torch.stack(frames_list).transpose(0, 1), torch.tensor(labels_list)
+    def __getitem__(self, idx):
+        return self.data[idx]
 
-    def get_dataloader(self):
-        return DataLoader(
-            self.dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            collate_fn=self.collate_fn,
-            pin_memory=True
-        )
-
-if __name__ == "__main__":
-    # Quick test if dataset is present
-    print("Testing DVS Loader...")
-    # Note: This requires the dataset to be downloaded at the specified root
-    # For now, we just verify the logic
-    print("DVS Loader logic initialized.")

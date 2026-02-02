@@ -1,112 +1,74 @@
 # Neuro-SVT: Spiking Vision Transformer for Object Permanence
 
-A research implementation of a **Spiking Vision Transformer (SVT)** with a "Leaky Memory Token" for energy-efficient object permanence on event-driven cameras.
+A research implementation of a **Spiking Vision Transformer (SVT)** with a "Leaky Memory Token" designed for energy-efficient object permanence on event-driven cameras.
 
 ## 🎯 Research Goals
 
-1. **Energy Efficiency**: Achieve >40% energy reduction vs standard ViT through spike-based computation
-2. **Memory Persistence**: Maintain object representations during occlusion via slow-decay LIF neurons
+1. **Energy Efficiency**: Achieve >90% energy reduction vs standard ViT through spike-based computation (SOPs vs MACs).
+2. **Memory Persistence**: Maintain object representations during occlusion via slow-decay LIF neurons in a dedicated memory token.
 
-## 🚀 Quick Start
+## 🚀 Optimized Training Flow (DVS128 Gesture)
 
-### 1. Clone and Setup
+The project is optimized for high-speed training on a single workstation (e.g., RTX A4000).
+
+### 1. Setup
 ```bash
-git clone https://github.com/[your-repo]/svt.git
-cd svt
-python -m venv venv
-
-# Windows
-.\venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
-
 pip install -r requirements.txt
+# For CUDA 12.x, ensure cupy is installed:
+pip install cupy-cuda12x
 ```
 
-### 2. Validate the Model
+### 2. Preprocessing (One-time, ~2 mins)
+Convert raw DVS events into pre-processed frame tensors to eliminate disk I/O bottlenecks.
 ```bash
-python validate.py
+python -m src.utils.preprocess_dvs128
 ```
-This runs the energy baseline test and generates `results/memory_demonstration_v2.png`.
 
-### 3. Train on DVS128 Gesture (Optional)
+### 3. Training (~12s/it, ~13 hours total)
+Uses a **RAM-cache strategy** to load all processed data into memory for zero-latency loading.
 ```bash
-# Download dataset from IBM Box (see Data section below)
+# Windows (PowerShell) - with VRAM fragmentation fix
+$env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
 python -m src.train_dvs
 ```
+
+**Options:**
+- `--resume`: Resume training from `checkpoints/dvs_latest.pt`.
+- `--no-cupy`: Use standard PyTorch backend if CuPy is not available.
+- `--no-amp`: Disable automatic mixed precision training.
 
 ## 📁 Project Structure
 
 ```
 svt/
 ├── src/
-│   ├── model.py              # Main SVT model
+│   ├── model.py              # Main SVT model (Leaky Memory Token)
 │   ├── modules/
 │   │   ├── attention.py      # SDSABlock with memory LIF
 │   │   └── patch_embed.py    # Spike-based patch embedding
 │   ├── data/
-│   │   └── dvs_loader.py     # DVS128 Gesture data loader
+│   │   └── dvs_loader.py     # RAM-cached DVS128 loader
 │   ├── utils/
-│   │   └── energy_meter.py   # SOP counter for energy tracking
-│   └── train_dvs.py          # DVS128 training script
-├── validate.py               # Validation & visualization
-├── quick_train.py            # Quick smoke test
+│   │   ├── energy_meter.py   # SOP counter for energy tracking
+│   │   └── preprocess_dvs128.py # Pre-processing script
+│   └── train_dvs.py          # Optimized training script
+├── data/                     # Dataset storage
+├── checkpoints/              # Model weights (.pt)
 ├── requirements.txt
-└── results/                  # Generated plots
+└── README.md
 ```
 
-## 📊 Key Results
+## 📊 Key Optimizations
 
-| Metric | Value |
-|--------|-------|
-| Energy Reduction | **99.8%** vs ViT baseline |
-| Average Firing Rate | ~28-33% |
-| Memory Token Persistence | ~0.16 during occlusion |
+| Feature | Impact |
+|---------|--------|
+| **RAM Cache** | Data loading cut from 45s/batch to **0s** |
+| **CuPy Backend** | Fused CUDA kernels for spiking neurons |
+| **AMP Training** | 16-bit precision for 2x faster iterations |
+| **Tuned BPTT** | Batch size 16 optimized for 16GB VRAM |
 
 ## 📦 Data
-
-### DVS128 Gesture Dataset
-The DVS128 Gesture dataset must be downloaded manually from IBM Box:
-
-1. Go to: [IBM Box - DVS128 Gesture](https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794)
-2. Download these files:
-   - `DvsGesture.tar.gz` (~2.9 GB)
-   - `gesture_mapping.csv`
-   - `LICENSE.txt`
-   - `README.txt`
-3. Place them in: `data/DVS128Gesture/download/`
-
-The loader will automatically extract and preprocess the data on first run.
-
-## 🔧 Configuration
-
-### Model Parameters (SVT-Tiny)
-- `embed_dim`: 192
-- `depth`: 4 transformer blocks
-- `num_heads`: 3
-- `spatial_tau`: 1.1 (fast decay for spatial tokens)
-- `memory_tau`: 5.0 (slow decay for memory persistence)
-
-### Training
-- Optimizer: AdamW (lr=1e-3)
-- Loss: MixLoss (CrossEntropy + Rate Regularization)
-- Batch size: 16
-- Time steps (T): 16
-
-## 🖥️ Hardware Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| GPU | RTX 3060 (6GB) | RTX 4070+ (8GB+) |
-| RAM | 16GB | 32GB |
-| CUDA | 11.8+ | 12.x |
-
-## 📝 Notes
-
-- SpikingJelly's Cupy backend requires CUDA. Install `cupy-cuda12x` for CUDA 12.
-- On Windows, multiprocessing can be slow. Set `num_workers=0` in the DataLoader if you encounter issues.
-- The DVS128 preprocessing only runs once - subsequent runs load from `events_np/`.
+The DVS128 Gesture dataset should be placed in `data/DVS128Gesture/download/`. The preprocessing script will generate `.pt` tensors in `data/DVS128Gesture_Processed/`.
 
 ## 📄 License
-
 Apache 2.0

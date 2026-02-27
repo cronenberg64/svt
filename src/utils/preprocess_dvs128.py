@@ -72,7 +72,7 @@ def main():
     print(f"Time Steps: {TIME_STEPS}")
     
     if not os.path.exists(ORIGIN_DIR):
-        print(f"\n❌ Error: Could not find dataset at {ORIGIN_DIR}")
+        print(f"\n Error: Could not find dataset at {ORIGIN_DIR}")
         print("Please download the dataset first by running the training script once.")
         return
     
@@ -83,7 +83,7 @@ def main():
     preprocess_and_save(ORIGIN_DIR, OUTPUT_DIR, T=TIME_STEPS, train=False)
     
     print("\n" + "=" * 60)
-    print(f"✅ Done! Processed data saved to {OUTPUT_DIR}")
+    print(f" Done! Processed data saved to {OUTPUT_DIR}")
     print("=" * 60)
     print("\nYou can now run training with the fast loader:")
     print("  python -m src.train_dvs")

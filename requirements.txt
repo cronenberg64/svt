@@ -9,9 +9,9 @@ torchvision>=0.15.0
 spikingjelly>=0.0.0.0.14
 
 # CUDA acceleration
-# For CUDA 12.x (RTX 30/40 series):
-cupy-cuda12x
-# For CUDA 11.x (older GPUs), use: cupy-cuda11x
+cupy
+# For CUDA 12.x (RTX 30/40 series) specific wheels if needed:
+# cupy-cuda12x
 
 # Utilities
 numpy>=1.24.0

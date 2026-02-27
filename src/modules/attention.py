@@ -64,24 +64,24 @@ class SpikingSelfAttention(nn.Module):
         self.k_proj = nn.Linear(dim, dim, bias=qkv_bias)
         self.v_proj = nn.Linear(dim, dim, bias=qkv_bias)
         
-        # LIF neurons for generating binary spikes from Q, K, V
+        # Parametric LIF neurons (Learnable Tau) for generating binary spikes from Q, K, V, Proj
         # These convert continuous values to binary spike events (0 or 1)
-        self.q_lif = neuron.LIFNode(
-            tau=tau,
+        self.q_lif = neuron.ParametricLIFNode(
+            init_tau=tau,
             v_threshold=v_threshold,
             detach_reset=True,
             step_mode='m',  # Multi-step mode for temporal processing
             backend='cupy' if torch.cuda.is_available() else 'torch',
         )
-        self.k_lif = neuron.LIFNode(
-            tau=tau,
+        self.k_lif = neuron.ParametricLIFNode(
+            init_tau=tau,
             v_threshold=v_threshold,
             detach_reset=True,
             step_mode='m',
             backend='cupy' if torch.cuda.is_available() else 'torch',
         )
-        self.v_lif = neuron.LIFNode(
-            tau=tau,
+        self.v_lif = neuron.ParametricLIFNode(
+            init_tau=tau,
             v_threshold=v_threshold,
             detach_reset=True,
             step_mode='m',
@@ -90,8 +90,8 @@ class SpikingSelfAttention(nn.Module):
         
         # Output projection
         self.proj = nn.Linear(dim, dim)
-        self.proj_lif = neuron.LIFNode(
-            tau=tau,
+        self.proj_lif = neuron.ParametricLIFNode(
+            init_tau=tau,
             v_threshold=v_threshold,
             detach_reset=True,
             step_mode='m',
@@ -203,17 +203,15 @@ class SpikingMLP(nn.Module):
         out_features = out_features or in_features
         
         self.fc1 = nn.Linear(in_features, hidden_features)
-        self.lif1 = neuron.LIFNode(
-            tau=tau,
-            detach_reset=True,
+        self.lif1 = neuron.ParametricLIFNode(
+            init_tau=tau, v_threshold=1.0, v_reset=0.0, detach_reset=True,
             step_mode='m',
             backend='cupy' if torch.cuda.is_available() else 'torch',
         )
         
         self.fc2 = nn.Linear(hidden_features, out_features)
-        self.lif2 = neuron.LIFNode(
-            tau=tau,
-            detach_reset=True,
+        self.lif2 = neuron.ParametricLIFNode(
+            init_tau=tau, v_threshold=1.0, v_reset=0.0, detach_reset=True,
             step_mode='m',
             backend='cupy' if torch.cuda.is_available() else 'torch',
         )
@@ -283,9 +281,9 @@ class SDSABlock(nn.Module):
             tau=spatial_tau,
         )
 
-        # Specialized LIF for Memory Token (Slow Decay)
-        self.memory_lif = neuron.LIFNode(
-            tau=memory_tau,
+        # Specialized Parametric LIF for Memory Token (Slow Decay)
+        self.memory_lif = neuron.ParametricLIFNode(
+            init_tau=memory_tau,
             v_threshold=0.5,  # Lowered from 1.0 for stronger firing
             detach_reset=True,
             step_mode='m',
@@ -381,4 +379,4 @@ if __name__ == "__main__":
     print(f"Output shape: {out.shape}")
     print(f"Attn shape:   {attn_map.shape}")
     print(f"Output sparsity: {(out == 0).float().mean():.2%}")
-    print("\n✓ SDSA test passed!")
+    print("\n SDSA test passed!")

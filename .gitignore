@@ -29,6 +29,7 @@ checkpoints/
 *.log
 *.pt
 *.pth
+!weights/dvs_best.pt
 
 # Large Data (download manually)
 data/DVS128Gesture/download/

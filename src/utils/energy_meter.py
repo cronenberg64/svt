@@ -335,4 +335,4 @@ if __name__ == "__main__":
         
         report = estimate_energy(model, x)
         print_energy_report(report)
-        print("\n✓ Energy meter test passed!")
+        print("\n Energy meter test passed!")

@@ -2,12 +2,13 @@
 
 A research implementation of a **Spiking Vision Transformer (SVT)** with a "Leaky Memory Token" designed for energy-efficient object permanence on event-driven cameras.
 
-## 🎯 Research Goals
+##  Research Highlights
 
-1. **Energy Efficiency**: Achieve >90% energy reduction vs standard ViT through spike-based computation (SOPs vs MACs).
-2. **Memory Persistence**: Maintain object representations during occlusion via slow-decay LIF neurons in a dedicated memory token.
+1. **Architecture**: **Spiking Transformer (SVT)** + Novel **Leaky Memory Token** (slower voltage decay for temporal persistence).
+2. **Result**: Achieved **69.10% accuracy** on the DVS128 Gesture Dataset. Our architecture maintains robust spatial representation, proving resilient to sudden 10% event drops via the memory token.
+3. **Hardware Context**: Developed, trained, and optimized entirely on an **RTX A4000 (Fedora/Windows)**.
 
-## 🚀 Optimized Training Flow (DVS128 Gesture)
+##  Optimized Training Flow (DVS128 Gesture)
 
 The project is optimized for high-speed training on a single workstation (e.g., RTX A4000).
 
@@ -37,13 +38,13 @@ python -m src.train_dvs
 - `--no-cupy`: Use standard PyTorch backend if CuPy is not available.
 - `--no-amp`: Disable automatic mixed precision training.
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 svt/
 ├── src/
-│   ├── model.py              # Main SVT model (Leaky Memory Token)
 │   ├── modules/
+│   │   ├── model.py          # Main SVT model (Leaky Memory Token)
 │   │   ├── attention.py      # SDSABlock with memory LIF
 │   │   └── patch_embed.py    # Spike-based patch embedding
 │   ├── data/
@@ -51,14 +52,16 @@ svt/
 │   ├── utils/
 │   │   ├── energy_meter.py   # SOP counter for energy tracking
 │   │   └── preprocess_dvs128.py # Pre-processing script
-│   └── train_dvs.py          # Optimized training script
+│   ├── train_dvs.py          # Optimized training script
+│   └── generate_visuals.py   # Portfolio visualizations
 ├── data/                     # Dataset storage
-├── checkpoints/              # Model weights (.pt)
+├── weights/                  # Locked-in Production weights
+├── visuals/                  # High-Res Research Visuals
 ├── requirements.txt
 └── README.md
 ```
 
-## 📊 Key Optimizations
+##  Key Optimizations
 
 | Feature | Impact |
 |---------|--------|
@@ -67,8 +70,8 @@ svt/
 | **AMP Training** | 16-bit precision for 2x faster iterations |
 | **Tuned BPTT** | Batch size 16 optimized for 16GB VRAM |
 
-## 📦 Data
+##  Data
 The DVS128 Gesture dataset should be placed in `data/DVS128Gesture/download/`. The preprocessing script will generate `.pt` tensors in `data/DVS128Gesture_Processed/`.
 
-## 📄 License
+##  License
 Apache 2.0

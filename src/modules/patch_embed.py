@@ -58,12 +58,14 @@ class SpikingPatchEmbed(nn.Module):
             padding=0,
         )
         
-        # LIF neuron for spike encoding
-        self.lif = neuron.LIFNode(
-            tau=tau,
+        # Parametric LIF neuron (Learnable Tau)
+        self.lif = neuron.ParametricLIFNode(
+            init_tau=tau,
+            v_threshold=1.0,
+            v_reset=0.0,
             detach_reset=True,
-            step_mode='m',  # Multi-step for temporal processing
-            backend='cupy' if torch.cuda.is_available() else 'torch',
+            step_mode='m',
+            backend='cupy' if torch.cuda.is_available() else 'torch'
         )
         
         # Layer normalization (optional, applied after flattening)
@@ -140,11 +142,13 @@ class SpikingConvStem(nn.Module):
         
         # Stage 1: 32x32 -> 16x16
         self.conv1 = nn.Conv2d(in_channels, hidden_dim, kernel_size=3, stride=2, padding=1)
-        self.lif1 = neuron.LIFNode(tau=tau, detach_reset=True, step_mode='m')
+        # Parametric LIF (Learnable Tau) for downsampling
+        self.lif1 = neuron.ParametricLIFNode(init_tau=tau, detach_reset=True, step_mode='m')
         
         # Stage 2: 16x16 -> 8x8
         self.conv2 = nn.Conv2d(hidden_dim, embed_dim, kernel_size=3, stride=2, padding=1)
-        self.lif2 = neuron.LIFNode(tau=tau, detach_reset=True, step_mode='m')
+        # Parametric LIF (Learnable Tau) for downsampling 2x
+        self.lif2 = neuron.ParametricLIFNode(init_tau=tau, detach_reset=True, step_mode='m')
         
         # Flatten for sequence
         self.num_patches = (img_size // 4) ** 2  # 8x8 = 64 patches for 32x32 input
@@ -211,4 +215,4 @@ if __name__ == "__main__":
     print(f"Num patches:  {patch_embed.num_patches}")
     print(f"Grid size:    {patch_embed.get_grid_size()}")
     print(f"Output sparsity: {(out == 0).float().mean():.2%}")
-    print("\n✓ Patch embedding test passed!")
+    print("\n Patch embedding test passed!")

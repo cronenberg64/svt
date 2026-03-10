@@ -32,14 +32,13 @@ def plot_vital_signs():
                     test_losses.append(float(match.group(4)))
                     test_accs.append(float(match.group(5)))
     
-    # Generate 4-panel figure
-    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
-    fig.suptitle('Neuro-SVT (Run 12) - Training Vital Signs', fontsize=20, fontweight='bold')
-    
-    ax1, ax2, ax3, ax4 = axes.flatten()
-    
-    # Panel 1: Accuracy
     if epochs:
+        # Generate 4-panel figure
+        fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+        fig.suptitle('Neuro-SVT - Training Vital Signs', fontsize=20, fontweight='bold')
+        ax1, ax2, ax3, ax4 = axes.flatten()
+        
+        # Panel 1: Accuracy
         ax1.plot(epochs, train_accs, label='Train Acc', color='blue', alpha=0.7)
         ax1.plot(epochs, test_accs, label='Test Acc', color='orange', linewidth=2)
         ax1.set_title("Accuracy over Epochs", fontsize=14)
@@ -47,9 +46,8 @@ def plot_vital_signs():
         ax1.set_ylabel("Accuracy (%)")
         ax1.legend()
         ax1.grid(True, alpha=0.3)
-    
-    # Panel 2: Loss
-    if epochs:
+        
+        # Panel 2: Loss
         ax2.plot(epochs, train_losses, label='Train Loss', color='blue', alpha=0.7)
         ax2.plot(epochs, test_losses, label='Test Loss', color='orange', linewidth=2)
         ax2.set_title("Loss over Epochs", fontsize=14)
@@ -57,13 +55,19 @@ def plot_vital_signs():
         ax2.set_ylabel("CrossEntropy Loss")
         ax2.legend()
         ax2.grid(True, alpha=0.3)
-    
+    else:
+        # Generate 2-panel figure since logs are missing
+        fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+        fig.suptitle('Neuro-SVT - Network Health Indicators', fontsize=20, fontweight='bold')
+        ax3, ax4 = axes.flatten()
+
     # Load model and Run 1 batch to get firing rates & gradients
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = SVT(img_size=128, patch_size=4, in_channels=2, num_classes=11,
                 embed_dim=192, depth=4, num_heads=3, spatial_tau=2.0, memory_tau=5.0).to(device)
     for m in model.modules():
         if isinstance(m, neuron.BaseNode) or hasattr(m, 'step_mode'): m.step_mode = 'm'
+        if hasattr(m, 'backend'): m.backend = 'torch'
     
     ckpt = torch.load('weights/dvs_best.pt', map_location=device)
     model.load_state_dict(ckpt['model_state_dict'] if 'model_state_dict' in ckpt else ckpt)
@@ -117,6 +121,7 @@ def plot_token_evolution():
                 embed_dim=192, depth=4, num_heads=3, spatial_tau=2.0, memory_tau=5.0).to(device)
     for m in model.modules():
         if isinstance(m, neuron.BaseNode) or hasattr(m, 'step_mode'): m.step_mode = 'm'
+        if hasattr(m, 'backend'): m.backend = 'torch'
     
     ckpt = torch.load('weights/dvs_best.pt', map_location=device)
     model.load_state_dict(ckpt['model_state_dict'] if 'model_state_dict' in ckpt else ckpt)
@@ -172,4 +177,4 @@ def plot_token_evolution():
 
 if __name__ == '__main__':
     plot_vital_signs()
-    plot_token_evolution()
+    # plot_token_evolution()  # Needs test data, which relies on DVS dataset download

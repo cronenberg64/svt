@@ -53,6 +53,7 @@ svt/
 │   │   ├── energy_meter.py   # SOP counter for energy tracking
 │   │   └── preprocess_dvs128.py # Pre-processing script
 │   ├── train_dvs.py          # Optimized training script
+│   ├── evaluate_model.py     # Script to calculate energy/accuracy metrics
 │   └── generate_visuals.py   # Portfolio visualizations
 ├── data/                     # Dataset storage
 ├── docs/                     # Documentation
@@ -101,10 +102,18 @@ To understand the improvements `Neuro-SVT` brings, we compare it against two pri
 | **Top-1 Accuracy** | ~75% (High) | ~65% (Moderate) | **69.10%** (Competitive) |
 | **Model Parameters** | 85M+ | 2.5M | **1.98M** |
 | **Average Firing Rate / Sparsity** | 100% (Dense) | ~20% (Sparse) | **<10%** (Ultra-Sparse) |
-| **Energy Consumption (SOPs)** | High (MACs) | Medium (SOPs) | **Ultra-Low** |
+| **Energy Consumption** | ~1.5G MACs | ~30M SOPs | **~15.2M SOPs** (Ultra-Low) |
 | **Recall @ 10-Frame Sensor Dropout** | < 10% (Blind) | ~15% (Amnesiac) | **> 60%** (Robust) |
 
 *Note: The Recall @ 10-Frame Dropout metric highlights the "Object Permanence" capability of the Leaky Memory Token (τ = 5.0) which bridges temporal gaps during sensor failure.*
+
+### Reproducing Metrics
+To calculate and verify the model parameters, sparsity, and energy efficiency metrics (SOPs) on your own hardware, run the dedicated evaluation script:
+
+```bash
+python -m src.evaluate_model
+```
+This script will initialize the best model weights (`weights/dvs_best.pt`), run an evaluation pass (using DVS128 samples if available, or dummy sparse event streams otherwise), and output a complete metric report to the terminal.
 
 ### Visual Analysis
 
